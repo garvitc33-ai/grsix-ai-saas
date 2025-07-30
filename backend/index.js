@@ -8,7 +8,7 @@ import http from "http";
 import { Server as SocketIOServer } from "socket.io";
 
 import leadsRoutes from "./routes/leads.js";
-import knowledgeBaseRoutes from "./routes/knowledgebase.js";
+import knowledgeBaseRoutes from "./routes/knowledgeBase.js";
 import agentRoutes from "./routes/agent.js";
 import campaignRoutes from "./routes/Campaigns.js";
 import scheduleRoutes from "./routes/schedule.js";
