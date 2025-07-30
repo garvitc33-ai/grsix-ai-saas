@@ -6,6 +6,11 @@ import twilio from "twilio";
 import nodemailer from "nodemailer";
 import http from "http";
 import { Server as SocketIOServer } from "socket.io";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 import leadsRoutes from "./routes/leads.js";
 import knowledgeBaseRoutes from "./routes/knowledgeBase.js";
@@ -195,13 +200,11 @@ app.get("/", (req, res) => {
 import "./callScheduler.js";
 
 // ✅ Serve frontend build from /frontend/dist
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 app.use(express.static(path.join(__dirname, "../frontend/dist")));
 
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
 });
-
 
 server.listen(port, () => {
   console.log(`🚀 Unified server running at http://localhost:${port}`);
