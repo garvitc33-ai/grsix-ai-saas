@@ -12,6 +12,7 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Route imports
 import leadsRoutes from "./routes/leads.js";
 import knowledgeBaseRoutes from "./routes/knowledgeBase.js";
 import agentRoutes from "./routes/agent.js";
@@ -40,6 +41,7 @@ app.use(cors());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
+// API mounts
 app.use("/leads", leadsRoutes);
 app.use("/api/knowledgebase", knowledgeBaseRoutes);
 app.use("/api/agent", agentRoutes);
@@ -47,8 +49,9 @@ app.use("/api/schedule", scheduleRoutes);
 app.use("/api/twilio", voiceHandler);
 app.use("/api/campaigns", campaignStatusRoutes);
 app.use("/api/chatbot", chatbotRoutes);
-app.use("/api/campaign", campaignRoutes); // ✅ safer mount to avoid path-to-regexp conflict
+app.use("/api/campaign", campaignRoutes); // ✅ safer mount
 
+// Cold email generator
 app.post("/api/generate-email", async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ message: "Website URL is required" });
@@ -61,6 +64,7 @@ app.post("/api/generate-email", async (req, res) => {
   }
 });
 
+// Cold email sender
 app.post("/api/send-email", async (req, res) => {
   const { url, to } = req.body;
   if (!url || !to)
@@ -197,6 +201,7 @@ app.get("/", (req, res) => {
   res.send("✅ GRSIX AI Unified Server is running!");
 });
 
+// Start background call scheduler
 import "./callScheduler.js";
 
 // ✅ Serve frontend build from /frontend/dist
