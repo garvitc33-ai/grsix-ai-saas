@@ -47,7 +47,7 @@ app.use("/api/schedule", scheduleRoutes);
 app.use("/api/twilio", voiceHandler);
 app.use("/api/campaigns", campaignStatusRoutes);
 app.use("/api/chatbot", chatbotRoutes);
-app.use("/api", campaignRoutes);
+app.use("/api/campaign", campaignRoutes); // ✅ safer mount to avoid path-to-regexp conflict
 
 app.post("/api/generate-email", async (req, res) => {
   const { url } = req.body;
