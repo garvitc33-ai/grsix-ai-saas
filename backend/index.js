@@ -12,11 +12,11 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Route imports
+// Route imports - all lowercase filenames
 import leadsRoutes from "./routes/leads.js";
 import knowledgeBaseRoutes from "./routes/knowledgeBase.js";
 import agentRoutes from "./routes/agent.js";
-import campaignRoutes from "./routes/Campaigns.js";
+import campaignRoutes from "./routes/campaigns.js";   // Lowercase filename!
 import scheduleRoutes from "./routes/schedule.js";
 import voiceHandler from "./twilio/voiceHandler.js";
 import { generateEmailFromWebsite } from "./ai.js";
@@ -47,9 +47,9 @@ app.use("/api/knowledgebase", knowledgeBaseRoutes);
 app.use("/api/agent", agentRoutes);
 app.use("/api/schedule", scheduleRoutes);
 app.use("/api/twilio", voiceHandler);
-app.use("/api/campaigns", campaignStatusRoutes);
+app.use("/api/campaigns", campaignStatusRoutes); // ALL lowercase
 app.use("/api/chatbot", chatbotRoutes);
-app.use("/api/campaign", campaignRoutes); // ✅ safer mount
+app.use("/api/campaign", campaignRoutes);
 
 // Cold email generator
 app.post("/api/generate-email", async (req, res) => {
