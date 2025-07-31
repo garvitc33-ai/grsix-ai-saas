@@ -2,3 +2,4 @@ backend/token.json
 backend/client_secret.json
 backend/node_modules
 backend/package-lock.json
+backend/.env
