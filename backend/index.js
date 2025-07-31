@@ -15,7 +15,7 @@ const __dirname = path.dirname(__filename);
 import leadsRoutes from "./routes/leads.js";
 import knowledgeBaseRoutes from "./routes/knowledgeBase.js";
 import agentRoutes from "./routes/agent.js";
-import campaignRoutes from "./routes/Campaigns.js";
+import campaignRoutes from "./routes/campaigns.js";
 import scheduleRoutes from "./routes/schedule.js";
 import voiceHandler from "./twilio/voiceHandler.js";
 import { generateEmailFromWebsite } from "./ai.js";
