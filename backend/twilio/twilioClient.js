@@ -4,11 +4,11 @@ import twilio from "twilio";
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const twilioNumber = process.env.TWILIO_PHONE_NUMBER;
-const baseUrl = process.env.NGROK_URL; // or your public webhook base URL
+const baseUrl = process.env.BASE_URL; // ✅ Use BASE_URL instead of NGROK_URL
 
 // Validation
 if (!accountSid || !authToken || !twilioNumber || !baseUrl) {
-  throw new Error("Missing one or more required environment variables: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER, NGROK_URL");
+  throw new Error("Missing one or more required environment variables: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER, BASE_URL");
 }
 
 // Initialize Twilio client

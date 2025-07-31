@@ -1,5 +1,4 @@
-// models/KnowledgeBase.js
-
+// models/knowledgeBase.js
 import db from "../sqlite.js";
 
 // Create table if it doesn't exist
@@ -13,7 +12,7 @@ db.run(`
   )
 `);
 
-// Save a new knowledge base (Promise style)
+// Save a new knowledge base
 export function saveKnowledgeBase({ name, source_type = "manual", content }) {
   return new Promise((resolve, reject) => {
     const stmt = db.prepare(`
@@ -22,7 +21,7 @@ export function saveKnowledgeBase({ name, source_type = "manual", content }) {
     `);
     stmt.run(name, source_type, content, function (err) {
       if (err) {
-        console.error("❌ Error in saveKnowledgeBase:", err.message);
+        console.error("Error saving knowledge base:", err.message);
         reject(err);
       } else {
         resolve(this.lastID);
@@ -32,49 +31,60 @@ export function saveKnowledgeBase({ name, source_type = "manual", content }) {
   });
 }
 
-// Get all saved knowledge bases (Promise style)
+// Get all knowledge bases
 export function getAllKnowledgeBases() {
   return new Promise((resolve, reject) => {
-    db.all("SELECT * FROM knowledge_bases ORDER BY created_at DESC", (err, rows) => {
-      if (err) {
-        console.error("❌ Error in getAllKnowledgeBases:", err.message);
-        reject(err);
-      } else {
-        resolve(rows);
+    db.all(
+      "SELECT * FROM knowledge_bases ORDER BY created_at DESC",
+      (err, rows) => {
+        if (err) {
+          console.error("Error fetching knowledge bases:", err.message);
+          reject(err);
+        } else {
+          resolve(rows);
+        }
       }
-    });
+    );
   });
 }
 
-// Get a single KB by name (Promise style)
+// Get a knowledge base by name
 export function getKnowledgeBaseByName(name) {
   return new Promise((resolve, reject) => {
-    db.get("SELECT * FROM knowledge_bases WHERE name = ?", [name], (err, row) => {
-      if (err) {
-        console.error("❌ Error in getKnowledgeBaseByName:", err.message);
-        reject(err);
-      } else {
-        resolve(row);
+    db.get(
+      "SELECT * FROM knowledge_bases WHERE name = ?",
+      [name],
+      (err, row) => {
+        if (err) {
+          console.error("Error fetching knowledge base by name:", err.message);
+          reject(err);
+        } else {
+          resolve(row);
+        }
       }
-    });
+    );
   });
 }
 
-// Get KB by ID (Promise style)
+// Get a knowledge base by ID
 export function getKnowledgeBaseById(id) {
   return new Promise((resolve, reject) => {
-    db.get("SELECT * FROM knowledge_bases WHERE id = ?", [id], (err, row) => {
-      if (err) {
-        console.error("❌ Error in getKnowledgeBaseById:", err.message);
-        reject(err);
-      } else {
-        resolve(row);
+    db.get(
+      "SELECT * FROM knowledge_bases WHERE id = ?",
+      [id],
+      (err, row) => {
+        if (err) {
+          console.error("Error fetching knowledge base by ID:", err.message);
+          reject(err);
+        } else {
+          resolve(row);
+        }
       }
-    });
+    );
   });
 }
 
-// Update a KB by name (Promise style)
+// Update knowledge base content by name
 export function updateKnowledgeBaseByName(name, content) {
   return new Promise((resolve, reject) => {
     db.run(
@@ -82,7 +92,7 @@ export function updateKnowledgeBaseByName(name, content) {
       [content, name],
       function (err) {
         if (err) {
-          console.error("❌ Error in updateKnowledgeBaseByName:", err.message);
+          console.error("Error updating knowledge base:", err.message);
           reject(err);
         } else {
           resolve(this.changes);

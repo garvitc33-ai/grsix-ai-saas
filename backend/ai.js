@@ -4,6 +4,10 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+if (!process.env.GROQ_API_KEY) {
+  throw new Error("Missing GROQ_API_KEY in environment variables");
+}
+
 const conversationHistory = {}; // { [sessionId]: [ { role, content } ... ] }
 
 /**
@@ -11,6 +15,7 @@ const conversationHistory = {}; // { [sessionId]: [ { role, content } ... ] }
  */
 export async function generateEmailFromWebsite(url) {
   const websiteText = await extractWebsiteText(url);
+
   if (!websiteText || websiteText.length < 100) {
     throw new Error("Website content too short or failed to extract");
   }
@@ -32,7 +37,7 @@ Only return the final email body — no titles, no extra commentary.
 
 Website content:
 """${websiteText}"""
-  `;
+  `.trim();
 
   const chat = await groq.chat.completions.create({
     messages: [{ role: "user", content: prompt }],
@@ -45,7 +50,7 @@ Website content:
 /**
  * Generate a natural call script using a company knowledge base
  */
-export async function generateScript(companyName, knowledgeBase) {
+export async function generateScript(companyName, knowledgeBase = "") {
   const callPrompt = `
 You're a persuasive, confident AI sales assistant calling on behalf of "${companyName}".
 
@@ -64,7 +69,7 @@ Your call flow should be:
 
 Knowledge Base:
 """${knowledgeBase}"""
-  `;
+  `.trim();
 
   const response = await groq.chat.completions.create({
     messages: [{ role: "user", content: callPrompt }],
@@ -77,7 +82,7 @@ Knowledge Base:
 /**
  * Improve knowledge base using feedback
  */
-export async function improveKnowledgeBase(oldBase, prompt) {
+export async function improveKnowledgeBase(oldBase, instructionPrompt) {
   const fullPrompt = `
 You are a helpful AI assistant. You're improving a company's knowledge base based on human feedback.
 
@@ -85,10 +90,10 @@ You are a helpful AI assistant. You're improving a company's knowledge base base
 ${oldBase}
 
 --- Instruction ---
-${prompt}
+${instructionPrompt}
 
 Now rewrite the updated knowledge base clearly, keeping the original structure and integrating the feedback.
-  `;
+  `.trim();
 
   const response = await groq.chat.completions.create({
     messages: [
@@ -104,8 +109,12 @@ Now rewrite the updated knowledge base clearly, keeping the original structure a
 /**
  * Generate the next response during the call — fast, clear, and persuasive
  */
-export async function generateNextGroqResponse(referenceScript, userInput, sessionId) {
+export async function generateNextGroqResponse(referenceScript = "", userInput = "", sessionId = "") {
   try {
+    if (!userInput?.trim()) {
+      return "Sorry, I didn’t catch that. Could you repeat?";
+    }
+
     if (!conversationHistory[sessionId]) {
       conversationHistory[sessionId] = [
         {
@@ -130,14 +139,12 @@ FACTS ONLY (do not repeat directly):
       ];
     }
 
-    conversationHistory[sessionId].push({
-      role: "user",
-      content: userInput
-    });
+    conversationHistory[sessionId].push({ role: "user", content: userInput });
 
+    // Trim history to last 20 messages (keep system message intact)
     if (conversationHistory[sessionId].length > 20) {
       conversationHistory[sessionId] = [
-        conversationHistory[sessionId][0],
+        conversationHistory[sessionId][0], // system
         ...conversationHistory[sessionId].slice(-19)
       ];
     }
@@ -149,21 +156,13 @@ FACTS ONLY (do not repeat directly):
     });
 
     const reply = chat.choices[0].message.content.trim();
-
-    conversationHistory[sessionId].push({
-      role: "assistant",
-      content: reply
-    });
+    conversationHistory[sessionId].push({ role: "assistant", content: reply });
 
     const lower = userInput.toLowerCase();
-    const shouldEnd =
-      lower.includes("bye") ||
-      lower.includes("not interested") ||
-      lower.includes("stop") ||
-      lower.includes("no thanks") ||
-      lower.includes("call later") ||
-      lower.includes("don't want") ||
-      lower.includes("already using");
+    const shouldEnd = [
+      "bye", "not interested", "stop", "no thanks",
+      "call later", "don't want", "already using"
+    ].some(phrase => lower.includes(phrase));
 
     if (shouldEnd) {
       return "Got it! Thanks for your time — have a great day!";
@@ -172,6 +171,6 @@ FACTS ONLY (do not repeat directly):
     return reply;
   } catch (err) {
     console.error("❌ Groq AI error:", err.message);
-    return "Sorry, I didn’t catch that. Could you repeat?";
+    return "Sorry, something went wrong. Could you repeat that?";
   }
 }

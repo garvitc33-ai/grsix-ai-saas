@@ -4,7 +4,7 @@ import db from "../sqlite.js";
 
 const router = express.Router();
 
-// Patch db to support Promises natively (if not already)
+// ✅ Patch SQLite async methods if not defined
 if (!db.allAsync) {
   db.allAsync = (...args) =>
     new Promise((resolve, reject) => {
@@ -23,35 +23,34 @@ if (!db.allAsync) {
     });
 }
 
-// ✅ Root test route for leads
+// ✅ Test route
 router.get("/", (req, res) => {
   res.json({ message: "Leads API is working!" });
 });
 
-// === ✅ Email Leads ===
-
-// Save an email lead
+// 📩 Save new email lead
 router.post("/email", async (req, res) => {
   try {
     const id = await saveEmailLead(req.body);
     res.status(200).json({ success: true, id });
   } catch (err) {
-    console.error("❌ Error saving email lead:", err);
+    console.error("❌ Error saving email lead:", err.message);
     res.status(500).json({ error: "Failed to save email lead" });
   }
 });
 
-// Get all email leads
+// 📩 Get all email leads
 router.get("/email", async (req, res) => {
   try {
     const leads = await getAllEmailLeads();
     res.json(leads);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("❌ Error fetching email leads:", err.message);
+    res.status(500).json({ error: "Failed to get email leads" });
   }
 });
 
-// Delete an email lead by ID
+// 🗑️ Delete email lead
 router.delete("/email/:id", async (req, res) => {
   const { id } = req.params;
   try {
@@ -66,22 +65,23 @@ router.delete("/email/:id", async (req, res) => {
   }
 });
 
-// === ✅ Campaign Call Leads ===
-
+// 📞 Add new campaign call lead
 router.post("/", async (req, res) => {
   try {
     const { name, phone, scheduled_time, campaign_id } = req.body;
     if (!name || !phone || !scheduled_time || !campaign_id) {
       return res.status(400).json({ error: "Missing required fields" });
     }
+
     await db.runAsync(
       `INSERT INTO campaign_leads (name, phone, scheduled_time, status, campaign_id)
        VALUES (?, ?, ?, 'pending', ?)`,
       [name, phone, scheduled_time, campaign_id]
     );
+
     res.status(200).json({ message: "Campaign lead scheduled successfully" });
   } catch (err) {
-    console.error("❌ Error inserting campaign lead:", err);
+    console.error("❌ Error inserting campaign lead:", err.message);
     res.status(500).json({ error: "Failed to insert campaign lead" });
   }
 });

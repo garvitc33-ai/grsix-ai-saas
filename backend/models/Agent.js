@@ -1,3 +1,5 @@
+// backend/models/Agent.js
+
 import db from "../sqlite.js";
 
 // Create agents table if it doesn't exist
@@ -12,22 +14,26 @@ db.run(`
   )
 `);
 
-// Save a new agent (Promise Style)
+// Save a new agent
 export function saveAgent({ knowledge_base_id, purpose, script, type }) {
   return new Promise((resolve, reject) => {
     const stmt = db.prepare(`
       INSERT INTO agents (knowledge_base_id, purpose, script, type)
       VALUES (?, ?, ?, ?)
     `);
-    stmt.run(knowledge_base_id, purpose, script, type, function (err) {
-      if (err) reject(err);
-      else resolve(this?.lastID);
+    stmt.run([knowledge_base_id, purpose, script, type], function (err) {
+      if (err) {
+        console.error("❌ Error saving agent:", err.message);
+        reject(err);
+      } else {
+        resolve(this.lastID);
+      }
     });
     stmt.finalize();
   });
 }
 
-// Get all agents with optional companyName from knowledge_bases (Promise style)
+// Get all agents with knowledge base name
 export function getAllAgents() {
   const query = `
     SELECT 
@@ -55,22 +61,30 @@ export function getAllAgents() {
   });
 }
 
-// Get agent by ID (Promise version)
+// Get single agent by ID
 export function getAgentById(id) {
   return new Promise((resolve, reject) => {
     db.get("SELECT * FROM agents WHERE id = ?", [id], (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
+      if (err) {
+        console.error("❌ Error in getAgentById:", err.message);
+        reject(err);
+      } else {
+        resolve(row);
+      }
     });
   });
 }
 
-// Delete agent by ID (Promise version)
+// Delete agent by ID
 export function deleteAgentById(id) {
   return new Promise((resolve, reject) => {
     db.run("DELETE FROM agents WHERE id = ?", [id], function (err) {
-      if (err) reject(err);
-      else resolve();
+      if (err) {
+        console.error("❌ Error in deleteAgentById:", err.message);
+        reject(err);
+      } else {
+        resolve();
+      }
     });
   });
 }

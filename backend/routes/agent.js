@@ -11,7 +11,6 @@ import { generateScript } from "../ai.js";
 
 const router = express.Router();
 
-// 🟡 Twilio client setup
 const client = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
@@ -30,20 +29,14 @@ router.post("/generate-script", async (req, res) => {
   try {
     const kb = await getKnowledgeBaseById(knowledgeBaseId);
     if (!kb) {
-      console.error("❌ Knowledge base not found");
       return res.status(404).json({ error: "Knowledge base not found" });
     }
 
-    try {
-      const script = await generateScript(kb.content, purpose);
-      res.status(200).json({ script });
-    } catch (genErr) {
-      console.error("❌ Script generation failed:", genErr.message);
-      res.status(500).json({ error: "Failed to generate script" });
-    }
+    const script = await generateScript(kb.content, purpose);
+    res.status(200).json({ script });
   } catch (err) {
-    console.error("❌ Unexpected error during script generation:", err.message);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("❌ Script generation failed:", err);
+    res.status(500).json({ error: "Failed to generate script" });
   }
 });
 
@@ -53,24 +46,20 @@ router.post("/", async (req, res) => {
 
   if (!knowledgeBaseId || !purpose || !script || !type) {
     return res.status(400).json({
-      error:
-        "All fields are required (knowledgeBaseId, purpose, script, type)",
+      error: "All fields are required (knowledgeBaseId, purpose, script, type)",
     });
   }
 
   try {
-    // Parameter names in models/Agent.js: knowledge_base_id, purpose, script, type
     const id = await saveAgent({
       knowledge_base_id: knowledgeBaseId,
       purpose,
       script,
       type,
     });
-    res
-      .status(200)
-      .json({ message: "✅ Agent saved successfully", id });
+    res.status(200).json({ message: "✅ Agent saved successfully", id });
   } catch (err) {
-    console.error("❌ Failed to save agent:", err.message);
+    console.error("❌ Failed to save agent:", err);
     res.status(500).json({ error: "Failed to save agent" });
   }
 });
@@ -79,10 +68,9 @@ router.post("/", async (req, res) => {
 router.get("/agents", async (req, res) => {
   try {
     const agents = await getAllAgents();
-    console.log("✅ Agents fetched successfully:", agents.length);
     res.status(200).json(agents);
   } catch (err) {
-    console.error("❌ Failed to fetch agents from DB:", err);
+    console.error("❌ Failed to fetch agents:", err);
     res.status(500).json({ error: "Failed to fetch agents" });
   }
 });
@@ -93,27 +81,25 @@ router.delete("/:id", async (req, res) => {
     await deleteAgentById(req.params.id);
     res.status(200).json({ message: "✅ Agent deleted successfully" });
   } catch (err) {
-    console.error("❌ Failed to delete agent:", err.message);
+    console.error("❌ Failed to delete agent:", err);
     res.status(500).json({ error: "Failed to delete agent" });
   }
 });
 
-// === 5️⃣ Trigger Real Twilio Call for Agent ===
+// === 5️⃣ Trigger Twilio Call ===
 router.post("/:id/call", async (req, res) => {
   try {
     const agent = await getAgentById(req.params.id);
+    if (!agent) return res.status(404).json({ error: "Agent not found" });
+
     const to = req.body?.to || process.env.MY_PHONE_NUMBER;
-    if (!agent)
-      return res.status(404).json({ error: "Agent not found" });
+    const baseUrl = process.env.BASE_URL || "http://localhost:5000";
 
     const call = await client.calls.create({
-      url: `${process.env.NGROK_URL}/api/twilio/${agent.id}`,
+      url: `${baseUrl}/api/twilio/${agent.id}`,
       to,
       from: process.env.TWILIO_PHONE_NUMBER,
     });
-
-    console.log("📞 Twilio Call SID:", call.sid);
-    console.log("📈 Call status:", call.status);
 
     res.status(200).json({
       message: `📞 Call triggered for agent ID: ${agent.id}`,
@@ -121,7 +107,7 @@ router.post("/:id/call", async (req, res) => {
       status: call.status,
     });
   } catch (err) {
-    console.error("❌ Failed to trigger call:", err.message);
+    console.error("❌ Failed to trigger call:", err);
     res.status(500).json({ error: "Failed to trigger call" });
   }
 });

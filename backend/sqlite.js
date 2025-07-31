@@ -1,4 +1,5 @@
 import sqlite3 from "sqlite3";
+import { promisify } from "util";
 
 const db = new sqlite3.Database("sqlite.db", (err) => {
   if (err) {
@@ -7,10 +8,10 @@ const db = new sqlite3.Database("sqlite.db", (err) => {
   }
   console.log("✅ Connected to SQLite database (sqlite.db)");
 
-  // Enable foreign keys enforcement
+  // Enable foreign keys
   db.run("PRAGMA foreign_keys = ON");
 
-  // knowledge_bases with additional fields
+  // knowledge_bases
   db.run(`
     CREATE TABLE IF NOT EXISTS knowledge_bases (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -24,7 +25,7 @@ const db = new sqlite3.Database("sqlite.db", (err) => {
     else console.log("✅ knowledge_bases table ready.");
   });
 
-  // agents with purpose and type fields, and renamed companyName to company_name for consistency
+  // agents
   db.run(`
     CREATE TABLE IF NOT EXISTS agents (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,7 +34,7 @@ const db = new sqlite3.Database("sqlite.db", (err) => {
       company_name TEXT,
       purpose TEXT,
       script TEXT NOT NULL,
-      type TEXT, -- real-time or scheduled
+      type TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases(id)
     )
@@ -42,7 +43,7 @@ const db = new sqlite3.Database("sqlite.db", (err) => {
     else console.log("✅ agents table ready.");
   });
 
-  // campaigns table unchanged
+  // campaigns
   db.run(`
     CREATE TABLE IF NOT EXISTS campaigns (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,7 +59,7 @@ const db = new sqlite3.Database("sqlite.db", (err) => {
     else console.log("✅ campaigns table ready.");
   });
 
-  // scheduled_calls table unchanged (matches previous)
+  // scheduled_calls
   db.run(`
     CREATE TABLE IF NOT EXISTS scheduled_calls (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,7 +81,7 @@ const db = new sqlite3.Database("sqlite.db", (err) => {
     else console.log("✅ scheduled_calls table ready.");
   });
 
-  // email_leads table unchanged
+  // email_leads
   db.run(`
     CREATE TABLE IF NOT EXISTS email_leads (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,9 +97,11 @@ const db = new sqlite3.Database("sqlite.db", (err) => {
     if (err) console.error("❌ Error creating email_leads table:", err.message);
     else console.log("✅ email_leads table ready.");
   });
-
-  // you can add other tables here...
-
 });
+
+// Promisify `db.all`, `db.get`, and `db.run` for async/await usage
+db.allAsync = promisify(db.all).bind(db);
+db.getAsync = promisify(db.get).bind(db);
+db.runAsync = promisify(db.run).bind(db);
 
 export default db;

@@ -1,5 +1,5 @@
 import express from "express";
-import { getAgentById } from "../models/Agent.js";
+import { getAgentById } from "../models/Agent.js"; // ✅ lowercase filename
 import twilio from "twilio";
 import { generateNextGroqResponse } from "../ai.js";
 
@@ -15,9 +15,9 @@ function isGoodbye(reply = "") {
 router.post("/:agentId", async (req, res) => {
   try {
     const { agentId } = req.params;
-    const agent = await getAgentById(agentId);
     const callSid = req.body.CallSid || "unknown-session";
 
+    const agent = await getAgentById(agentId);
     if (!agent) {
       return res.status(404).type("text/xml").send(`
         <Response>
@@ -44,7 +44,7 @@ router.post("/:agentId", async (req, res) => {
       input: "speech",
       action: `/api/twilio/step-2/${agentId}?sessionId=${callSid}`,
       method: "POST",
-      timeout: 4, // Shorter timeout for faster flow
+      timeout: 4,
     });
 
     gather.say({ voice: "alice", language: "en-US" }, greeting);
@@ -55,7 +55,7 @@ router.post("/:agentId", async (req, res) => {
 
     res.type("text/xml").send(response.toString());
   } catch (err) {
-    console.error("❌ Error in voiceHandler start:", err.message);
+    console.error("❌ Error in /:agentId:", err.message);
     res.status(500).type("text/xml").send(`
       <Response>
         <Say>Internal server error. Goodbye!</Say>
@@ -69,8 +69,8 @@ router.post("/:agentId", async (req, res) => {
 router.post("/step-2/:agentId", async (req, res) => {
   try {
     const { agentId } = req.params;
-    const userSpeech = req.body.SpeechResult || "";
     const sessionId = req.query.sessionId || "unknown-session";
+    const userSpeech = req.body.SpeechResult || "";
 
     if (!userSpeech) {
       return res.type("text/xml").send(`
@@ -83,7 +83,7 @@ router.post("/step-2/:agentId", async (req, res) => {
 
     const agent = await getAgentById(agentId);
     if (!agent) {
-      return res.type("text/xml").send(`
+      return res.status(404).type("text/xml").send(`
         <Response>
           <Say>Agent not found. Goodbye!</Say>
           <Hangup />
@@ -99,6 +99,7 @@ router.post("/step-2/:agentId", async (req, res) => {
 
     const referenceScript = agent.script || agent.knowledge_base || "";
     const rawReply = await generateNextGroqResponse(referenceScript, userSpeech, sessionId);
+
     history.push({ role: "assistant", text: rawReply });
 
     const response = new twilio.twiml.VoiceResponse();
@@ -107,7 +108,7 @@ router.post("/step-2/:agentId", async (req, res) => {
 
     for (const chunk of chunks) {
       response.say({ voice: "alice", language: "en-US" }, chunk);
-      response.pause({ length: 0.5 }); // Faster pacing
+      response.pause({ length: 0.5 });
     }
 
     if (isGoodbye(cleanedReply)) {
@@ -125,7 +126,7 @@ router.post("/step-2/:agentId", async (req, res) => {
 
     res.type("text/xml").send(response.toString());
   } catch (err) {
-    console.error("❌ Error in voiceHandler step-2:", err.message);
+    console.error("❌ Error in /step-2/:agentId:", err.message);
     res.status(500).type("text/xml").send(`
       <Response>
         <Say>Something went wrong. We'll call again soon. Goodbye!</Say>

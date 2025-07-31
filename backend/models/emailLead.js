@@ -1,6 +1,6 @@
 import db from "../sqlite.js";
 
-// Create the email_leads table if it doesn't exist
+// ✅ Create the email_leads table if it doesn't exist
 db.run(`
   CREATE TABLE IF NOT EXISTS email_leads (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -14,7 +14,7 @@ db.run(`
   )
 `);
 
-// Save a new email lead (Promise style)
+// ✅ Save a new email lead
 export function saveEmailLead(lead) {
   const { email, time, subject, preview, content, follow_up_status, category } = lead;
   return new Promise((resolve, reject) => {
@@ -34,7 +34,7 @@ export function saveEmailLead(lead) {
   });
 }
 
-// Get all email leads (Promise style)
+// ✅ Get all email leads
 export function getAllEmailLeads() {
   return new Promise((resolve, reject) => {
     db.all(`SELECT * FROM email_leads`, (err, rows) => {

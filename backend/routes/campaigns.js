@@ -1,56 +1,9 @@
 import express from "express";
 import db from "../sqlite.js";
+
 const router = express.Router();
 
-// --- Helpers (unchanged, but can be refactored for clarity) ---
-
-// For WHERE clauses with optional date range filters
-function sqlDateRange(where = "called_at", from, to) {
-  if (!from && !to) return "";
-  let clause = "";
-  if (from) clause += ` AND ${where} >= '${from}'`;
-  if (to) clause += ` AND ${where} <= '${to}'`;
-  return clause;
-}
-
-// Attempt to extract a phone number-like field from a lead object
-function extractPhone(lead) {
-  const phoneKeys = [
-    "phone", "Phone", "number", "Number", "PhoneNumber", "phonenumber"
-  ];
-  for (let key of phoneKeys) {
-    if (lead[key]) return lead[key];
-  }
-  for (let key in lead) {
-    if (/phone|number/i.test(key) && lead[key]) return lead[key];
-  }
-  return '';
-}
-
-async function getCurrentCampaignStats(query = {}) {
-  const { campaignId, agentId, from, to } = query;
-  let filter = "WHERE 1=1";
-  if (campaignId) filter += " AND campaign_id = " + Number(campaignId);
-  if (agentId) filter += " AND agent_id = " + Number(agentId);
-  filter += sqlDateRange("called_at", from, to);
-
-  try {
-    const rows = await db.allAsync(
-      `SELECT status, COUNT(*) as count FROM scheduled_calls ${filter} GROUP BY status`
-    );
-    const summary = { pending: 0, completed: 0, failed: 0, waiting: 0 };
-    rows.forEach((r) => { summary[r.status] = r.count; });
-    const row2 = await db.getAsync(
-      `SELECT COUNT(*) as total FROM scheduled_calls ${filter}`
-    );
-    summary.total = row2?.total || 0;
-    return summary;
-  } catch (err) {
-    throw err;
-  }
-}
-
-// Patch db to support Promises natively (if not already)
+// === Patch db methods for Promises (Render-safe) ===
 if (!db.allAsync) {
   db.allAsync = (...args) =>
     new Promise((resolve, reject) => {
@@ -69,32 +22,121 @@ if (!db.allAsync) {
     });
 }
 
-// === GET all campaigns
+// === Helpers ===
+function sqlDateRange(column = "called_at", from, to) {
+  if (!from && !to) return "";
+  let clause = "";
+  if (from) clause += ` AND ${column} >= '${from}'`;
+  if (to) clause += ` AND ${column} <= '${to}'`;
+  return clause;
+}
+
+function extractPhone(lead) {
+  const phoneKeys = [
+    "phone", "Phone", "number", "Number", "PhoneNumber", "phonenumber"
+  ];
+  for (let key of phoneKeys) {
+    if (lead[key]) return lead[key];
+  }
+  for (let key in lead) {
+    if (/phone|number/i.test(key) && lead[key]) return lead[key];
+  }
+  return "";
+}
+
+// === Routes ===
+
+// 1️⃣ Get all campaigns
 router.get("/", async (req, res) => {
   try {
-    const rows = await db.allAsync("SELECT * FROM campaigns");
+    const rows = await db.allAsync("SELECT * FROM campaigns ORDER BY scheduled_time DESC");
     res.json(rows);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// === GET campaign stats (filtered/aggregated)
+// 2️⃣ Campaign stats
 router.get("/stats", async (req, res) => {
+  const { campaignId, agentId, from, to } = req.query;
+  let filter = "WHERE 1=1";
+  if (campaignId) filter += " AND campaign_id = " + Number(campaignId);
+  if (agentId) filter += " AND agent_id = " + Number(agentId);
+  filter += sqlDateRange("called_at", from, to);
+
   try {
-    const stats = await getCurrentCampaignStats(req.query || {});
-    res.json(stats);
+    const rows = await db.allAsync(
+      `SELECT status, COUNT(*) as count FROM scheduled_calls ${filter} GROUP BY status`
+    );
+    const summary = { pending: 0, completed: 0, failed: 0, waiting: 0 };
+    rows.forEach((r) => { summary[r.status] = r.count; });
+    const totalRow = await db.getAsync(`SELECT COUNT(*) as total FROM scheduled_calls ${filter}`);
+    summary.total = totalRow?.total || 0;
+    res.json(summary);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// === GET recent calls for table
+// 3️⃣ Trend chart data
+router.get("/stats/trend", async (req, res) => {
+  const { campaignId, interval = "hourly", from, to } = req.query;
+  let filter = "WHERE 1=1";
+  if (campaignId) filter += " AND campaign_id = " + Number(campaignId);
+  filter += sqlDateRange("called_at", from, to);
+  const groupBy = interval === "daily"
+    ? `strftime('%Y-%m-%d', called_at)`
+    : `strftime('%Y-%m-%d %H', called_at)`;
+
+  try {
+    const rows = await db.allAsync(
+      `SELECT ${groupBy} as bucket, COUNT(*) as count
+       FROM scheduled_calls ${filter}
+       GROUP BY bucket
+       ORDER BY bucket ASC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4️⃣ Leaderboard
+router.get("/leaderboard", async (req, res) => {
+  const { type = "completed", period, from, to } = req.query;
+  let filter = "WHERE 1=1";
+  if (period === "last7days") filter += ` AND called_at >= date('now', '-7 day')`;
+  if (period === "today") filter += ` AND called_at >= date('now')`;
+  filter += sqlDateRange("called_at", from, to);
+
+  try {
+    const rows = await db.allAsync(
+      `SELECT agent_id, COUNT(*) as total_calls,
+       SUM(status = 'completed') as completed_calls,
+       SUM(CAST(duration as INTEGER)) as total_duration
+       FROM scheduled_calls
+       ${filter}
+       GROUP BY agent_id
+       ORDER BY ${type === "duration" ? "total_duration" : "completed_calls"} DESC
+       LIMIT 10`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 5️⃣ Recent calls
 router.get("/calls/recent", async (req, res) => {
   const { campaignId, agentId, limit = 20 } = req.query;
   let filter = "WHERE 1=1";
   if (campaignId) filter += " AND campaign_id = " + Number(campaignId);
   if (agentId) filter += " AND agent_id = " + Number(agentId);
+
   try {
     const rows = await db.allAsync(
       `SELECT id, customer_name, phone_number, status, called_at, duration, agent_id, campaign_id, outcome
@@ -106,127 +148,77 @@ router.get("/calls/recent", async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
-router.get("/stats/trend", async (req, res) => {
-  const { campaignId, interval = "hourly", from, to } = req.query;
-  let filter = "WHERE 1=1";
-  if (campaignId) filter += " AND campaign_id = " + Number(campaignId);
-  filter += sqlDateRange("called_at", from, to);
-  let groupBy = interval === "daily"
-    ? `strftime('%Y-%m-%d', called_at)`
-    : `strftime('%Y-%m-%d %H', called_at)`;
-  try {
-    const rows = await db.allAsync(
-      `SELECT ${groupBy} as bucket, COUNT(*) as count
-       FROM scheduled_calls
-       ${filter}
-       GROUP BY bucket
-       ORDER BY bucket ASC`
-    );
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.get("/leaderboard", async (req, res) => {
-  const { type = "completed", period, from, to } = req.query;
-  let filter = "WHERE 1=1";
-  if (period === "last7days") filter += ` AND called_at >= date('now', '-7 day')`;
-  if (period === "today") filter += ` AND called_at >= date('now')`;
-  filter += sqlDateRange("called_at", from, to);
-  try {
-    const rows = await db.allAsync(
-      `SELECT agent_id, COUNT(*) as total_calls,
-       SUM(status='completed') as completed_calls,
-       SUM(CAST(duration as INTEGER)) as total_duration
-       FROM scheduled_calls
-       ${filter}
-       GROUP BY agent_id
-       ORDER BY ${type === "duration" ? "total_duration" : "completed_calls"} DESC
-       LIMIT 10`
-    );
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// --- Main campaign creation: link scheduled_calls to campaign ---
+// 6️⃣ Start a campaign
 router.post("/start-campaign", async (req, res) => {
-  let { agentId, leads, scheduledAt } = req.body;
-  if (!agentId || !leads || leads.length === 0 || !scheduledAt) {
+  const { agentId, leads, scheduledAt } = req.body;
+  if (!agentId || !leads?.length || !scheduledAt) {
     return res.status(400).json({ message: "Missing fields!" });
   }
+
   try {
     const agentRow = await db.getAsync("SELECT * FROM agents WHERE id = ?", [agentId]);
     if (!agentRow) return res.status(404).json({ message: "Agent not found." });
-    // Insert new campaign
-    const campaignInsert = await db.runAsync(
+
+    const result = await db.runAsync(
       `INSERT INTO campaigns (name, agent_id, scheduled_time, status)
        VALUES (?, ?, ?, ?)`,
-      [
-        `Campaign_${new Date().toISOString()}`,
-        agentId,
-        scheduledAt,
-        "pending"
-      ]
+      [`Campaign_${new Date().toISOString()}`, agentId, scheduledAt, "pending"]
     );
-    const campaignId = campaignInsert.lastID;
-    for (let idx = 0; idx < leads.length; idx++) {
-      let lead = leads[idx];
-      let phoneRaw = extractPhone(lead) ?? '';
-      phoneRaw = phoneRaw.toString().trim().replace(/\.0$/, "");
-      if (!phoneRaw || phoneRaw === "+91" || phoneRaw === "") {
-        console.error("❌ No phone number for lead:", lead);
-        continue;
+    const campaignId = result.lastID;
+
+    for (let i = 0; i < leads.length; i++) {
+      let lead = leads[i];
+      let raw = extractPhone(lead) || "";
+      raw = raw.toString().trim().replace(/\.0$/, "").replace(/[^+\d]/g, "");
+
+      if (!raw || raw === "+91") continue;
+      if (!raw.startsWith("+")) {
+        if (raw.length === 10) raw = "+91" + raw;
+        else if (raw.length > 10 && raw.startsWith("91")) raw = "+" + raw;
       }
-      let cleaned = phoneRaw.replace(/[^+\d]/g, "");
-      if (!cleaned.startsWith("+")) {
-        if (cleaned.length === 10) cleaned = "+91" + cleaned;
-        else if (cleaned.length > 10 && cleaned.startsWith("91")) cleaned = "+" + cleaned;
-        else console.warn("⚠️ Unusual phone format:", cleaned);
-      }
-      const targetPhone = cleaned;
+
+      let script = agentRow.script || "";
       const leadName = lead.name || lead.Name || "Lead";
-      let aiScript = agentRow.script;
-      if (aiScript && aiScript.includes("{name}")) aiScript = aiScript.replace("{name}", leadName);
+      if (script.includes("{name}")) script = script.replace("{name}", leadName);
+
       await db.runAsync(
         `INSERT INTO scheduled_calls (
           customer_name, phone_number, scheduled_time, script, status, agent_id, campaign_id
         ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           leadName,
-          targetPhone,
-          idx === 0 ? scheduledAt : null,
-          aiScript,
-          idx === 0 ? "pending" : "waiting",
+          raw,
+          i === 0 ? scheduledAt : null,
+          script,
+          i === 0 ? "pending" : "waiting",
           agentRow.id,
-          campaignId
+          campaignId,
         ]
       );
     }
-    res.json({ message: "Campaign and sequential calls scheduled for all provided lead numbers!" });
+
+    res.json({ message: "✅ Campaign created and leads scheduled!" });
   } catch (err) {
-    console.error("❌ Error starting campaign:", err.message);
+    console.error("❌ Error creating campaign:", err);
     res.status(500).json({ message: "Failed to start campaign." });
   }
 });
 
-// === GET a specific campaign by ID (for demo/debug) ===
+// 7️⃣ Get campaign by ID
 router.get("/:id", async (req, res) => {
-  const { id } = req.params;
   try {
-    const row = await db.getAsync("SELECT * FROM campaigns WHERE id = ?", [id]);
+    const row = await db.getAsync("SELECT * FROM campaigns WHERE id = ?", [req.params.id]);
     if (!row) return res.status(404).json({ message: "Not found." });
     res.json(row);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
 export default router;
-
