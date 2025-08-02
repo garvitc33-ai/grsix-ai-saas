@@ -15,7 +15,7 @@ const AgentDashboard = ({ onBack }) => {
     setLoading(true);
     try {
       // 🔥 FIX: Correct endpoint path
-      const res = await fetch("http://localhost:3010/api/agent/agents");
+      const res = await fetch("/api/agent/agents");
       if (!res.ok) throw new Error("Failed to fetch agents");
       const data = await res.json();
       setAgents(Array.isArray(data) ? data : []);
@@ -32,7 +32,7 @@ const AgentDashboard = ({ onBack }) => {
     const confirmDelete = window.confirm("Are you sure you want to delete this agent?");
     if (!confirmDelete) return;
     try {
-      await fetch(`http://localhost:3010/api/agent/${id}`, { method: "DELETE" });
+      await fetch(`/api/agent/${id}`, { method: "DELETE" });
       setMessage("✅ Agent deleted successfully.");
       fetchAgents();
     } catch (err) {
