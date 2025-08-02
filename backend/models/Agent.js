@@ -1,27 +1,17 @@
-// backend/models/Agent.js
+// backend/models/agent.js
 
 import db from "../sqlite.js";
 
-// Create agents table if it doesn't exist
-db.run(`
-  CREATE TABLE IF NOT EXISTS agents (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    knowledge_base_id INTEGER NOT NULL,
-    purpose TEXT NOT NULL,
-    script TEXT NOT NULL,
-    type TEXT NOT NULL,  -- real-time or scheduled
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )
-`);
+// ❗ NO need to create table here; handled globally in sqlite.js
 
 // Save a new agent
-export function saveAgent({ knowledge_base_id, purpose, script, type }) {
+export function saveAgent({ knowledge_base_id, name, company_name, purpose, script, type }) {
   return new Promise((resolve, reject) => {
     const stmt = db.prepare(`
-      INSERT INTO agents (knowledge_base_id, purpose, script, type)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO agents (knowledge_base_id, name, company_name, purpose, script, type)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
-    stmt.run([knowledge_base_id, purpose, script, type], function (err) {
+    stmt.run([knowledge_base_id, name, company_name, purpose, script, type], function (err) {
       if (err) {
         console.error("❌ Error saving agent:", err.message);
         reject(err);
@@ -33,17 +23,19 @@ export function saveAgent({ knowledge_base_id, purpose, script, type }) {
   });
 }
 
-// Get all agents with knowledge base name
+// Get all agents with knowledge base/company name
 export function getAllAgents() {
   const query = `
     SELECT 
       agents.id,
       agents.knowledge_base_id,
+      agents.name,
+      agents.company_name,
       agents.purpose,
       agents.script,
       agents.type,
       agents.created_at,
-      knowledge_bases.name AS companyName
+      knowledge_bases.name AS knowledgeBaseName
     FROM agents
     LEFT JOIN knowledge_bases 
       ON agents.knowledge_base_id = knowledge_bases.id

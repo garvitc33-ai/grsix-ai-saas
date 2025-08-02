@@ -1,3 +1,5 @@
+// backend/index.js
+
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -9,21 +11,21 @@ import { Server as SocketIOServer } from "socket.io";
 import path from "path";
 import { fileURLToPath } from "url";
 
+dotenv.config();
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 import leadsRoutes from "./routes/leads.js";
 import knowledgeBaseRoutes from "./routes/knowledgeBase.js";
 import agentRoutes from "./routes/agent.js";
-import campaignRoutes from "./routes/campaigns.js";
+import campaignRoutes from "./routes/campaigns.js"; // <-- make sure this file exists (routes/campaigns.js)
 import scheduleRoutes from "./routes/schedule.js";
 import voiceHandler from "./twilio/voiceHandler.js";
 import { generateEmailFromWebsite } from "./ai.js";
 import db from "./sqlite.js";
 import campaignStatusRoutes from "./routes/campaignstatus.js";
 import chatbotRoutes from "./routes/chatbot.js";
-
-dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3010;
@@ -36,19 +38,22 @@ io.on("connection", (socket) => {
   console.log("📡 New analytics dashboard client connected");
 });
 
+// Middleware (MUST be at top)
 app.use(cors());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
+// Mount all API routes FIRST
 app.use("/leads", leadsRoutes);
 app.use("/api/knowledgebase", knowledgeBaseRoutes);
 app.use("/api/agent", agentRoutes);
 app.use("/api/schedule", scheduleRoutes);
 app.use("/api/twilio", voiceHandler);
-app.use("/api/campaigns", campaignStatusRoutes);
+app.use("/api/campaigns", campaignStatusRoutes); // status APIs
 app.use("/api/chatbot", chatbotRoutes);
-app.use("/api/campaign", campaignRoutes); // ✅ safer mount to avoid path-to-regexp conflict
+app.use("/api/campaign", campaignRoutes); // actual campaign entity
 
+// --- Email Generation API ---
 app.post("/api/generate-email", async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ message: "Website URL is required" });
@@ -61,6 +66,7 @@ app.post("/api/generate-email", async (req, res) => {
   }
 });
 
+// --- Send Email Endpoint ---
 app.post("/api/send-email", async (req, res) => {
   const { url, to } = req.body;
   if (!url || !to)
@@ -98,15 +104,25 @@ app.post("/api/send-email", async (req, res) => {
   }
 });
 
-const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+// --- Twilio Outbound Call (for admin test/demo) ---
+const client = (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN)
+  ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+  : null;
+
 let conversationMemory = [];
 
 app.get("/call", async (req, res) => {
+  if (!client) return res.status(500).send("❌ Twilio env vars not set.");
+  if (!process.env.MY_PHONE_NUMBER || !process.env.TWILIO_PHONE_NUMBER) {
+    return res.status(500).send("❌ Twilio phone numbers are not set.");
+  }
+  // BASE_URL used instead of NGROK_URL (never use ngrok in prod)
+  const baseUrl = process.env.BASE_URL || `http://localhost:${port}`;
   try {
     await client.calls.create({
       to: process.env.MY_PHONE_NUMBER,
       from: process.env.TWILIO_PHONE_NUMBER,
-      url: `${process.env.NGROK_URL}/voice`,
+      url: `${baseUrl}/voice`,
     });
     res.send("📞 Call started!");
   } catch (err) {
@@ -115,6 +131,7 @@ app.get("/call", async (req, res) => {
   }
 });
 
+// --- Twilio Voice Conversation Demo (Hindi AI Assistant) ---
 app.post("/voice", (req, res) => {
   console.log("✅ /voice route hit");
   const twiml = new twilio.twiml.VoiceResponse();
@@ -181,7 +198,6 @@ app.post("/gather", async (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
 
   twiml.say({ voice: "Polly.Aditi", language: "hi-IN" }, aiReply);
-
   twiml.gather({
     input: "speech",
     timeout: 5,
@@ -193,19 +209,23 @@ app.post("/gather", async (req, res) => {
   res.send(twiml.toString());
 });
 
+// --- App root health check/landing page
 app.get("/", (req, res) => {
   res.send("✅ GRSIX AI Unified Server is running!");
 });
 
+// --- Load call scheduler (cron jobs for outbound calls/campaigns)
 import "./callScheduler.js";
 
-// ✅ Serve frontend build from /frontend/dist
+// --- Serve frontend build from /frontend/dist (SSR)
+// This block assumes you run frontend build before starting backend
 app.use(express.static(path.join(__dirname, "../frontend/dist")));
 
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
 });
 
+// --- Start HTTP server
 server.listen(port, () => {
   console.log(`🚀 Unified server running at http://localhost:${port}`);
 });

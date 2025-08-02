@@ -1,5 +1,5 @@
 import express from "express";
-import { getAgentById } from "../models/Agent.js"; // ✅ lowercase filename
+import { getAgentById } from "../models/agent.js"; // ✅ lowercase filename
 import twilio from "twilio";
 import { generateNextGroqResponse } from "../ai.js";
 
